@@ -109,7 +109,9 @@
   .txt{display:flex;flex-direction:column;gap:12px;min-width:0;justify-content:center}
   .vis{min-width:0;min-height:0;height:100%;display:flex;flex-direction:column;justify-content:center;gap:14px}
   .vis svg{width:100%;height:100%;display:block;overflow:visible}
-  @media (max-width:980px){.vis{height:auto} .vis svg{height:auto}}
+  @media (max-width:980px){.vis{height:auto} .vis svg{height:auto;max-height:52vh}}
+  /* narrow screens scroll the page: keep the buttons on screen */
+  @media (max-width:900px){.foot{position:sticky;bottom:0;background:var(--paper);padding:10px 0;margin:0 -2px;z-index:2}}
   .slide.hasvis h2{font-size:clamp(21px,2.5vw,27px);max-width:none}
   .slide.hasvis p{font-size:clamp(15px,1.55vw,16.5px);max-width:40ch}
   .kind{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:10.5px;font-weight:700;
@@ -560,10 +562,8 @@ VIS.turn=function(){return S+
  tx(0,240,"The green row is one caller turn.",15,"var(--ink)",null,1)+
  box(0,264,460,96,"var(--go-bg)","var(--go)")+
  tx(16,294,"OPENS   when the caller starts answering",13,"var(--ink)")+
- tx(16,322,"CLOSES  when the agent decides",13,"var(--ink)")+
- tx(84,346,"the caller has finished",13,"var(--go)")+
- tx(0,400,"This lesson is about",14,"var(--soft)")+
- tx(0,426,"that closing decision.",14,"var(--soft)")+
+ '<text x="16" y="334" font-size="12.5" fill="var(--ink)">CLOSES  when the agent decides <tspan fill="var(--go)" font-weight="700">the caller has finished</tspan></text>'+
+ tx(0,400,"This lesson is about that closing decision.",14,"var(--soft)")+
  '</svg>';};
 
 VIS.hard=function(){return S+
