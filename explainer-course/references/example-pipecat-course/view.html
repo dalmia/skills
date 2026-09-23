@@ -741,8 +741,8 @@ function flow(hot){
  tx(352,322,hot?"":"↑ TAKEN",12,"var(--go)","middle",1)+
  box(0,344,460,96,hot?"var(--stop-bg)":"var(--go-bg)",hot?"var(--stop)":"var(--go)")+
  tx(18,376,hot?"The reset made the condition true,":"_vad_user_speaking is True, so",14,"var(--ink)")+
- tx(18,400,hot?"so the left branch runs. It was":"the condition is false. The turn",14,"var(--ink)")+
- tx(18,424,hot?"written for a transcript with no VAD.":"closes only when the caller stops.",14,"var(--ink)")+
+ tx(18,400,hot?"so the timer path runs. That path is":"the condition is false. The turn",14,"var(--ink)")+
+ tx(18,424,hot?"meant for calls with no VAD at all.":"closes only when the caller stops.",14,"var(--ink)")+
  '</svg>';}
 VIS.branch=function(){return flow(true);};
 VIS.branch2=function(){return flow(false);};
