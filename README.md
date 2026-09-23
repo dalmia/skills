@@ -1,7 +1,11 @@
 # Skills
 
-Useful skills for Claude Code. To install one, copy its folder into `~/.claude/skills/` and invoke it with `/<folder name>`.
+Skills for coding agents (Claude Code, Codex, Cursor, and others that read `SKILL.md`).
 
-## Skills
+Install one:
 
-- `explainer-course`: builds an interactive course that explains a set of changes or a concept to a non-engineer, one slide per lesson, and reviews every slide with parallel agents until it passes.
+```bash
+npx skills add dalmia/skills --skill explainer-course
+```
+
+- `explainer-course`: turns a set of changes or a concept into an interactive course for a non-engineer, one slide per lesson, reviewed by parallel agents until every slide passes.
