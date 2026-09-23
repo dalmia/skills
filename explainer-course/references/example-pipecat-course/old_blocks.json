@@ -1,0 +1,237 @@
+[
+ {
+  "m": 0,
+  "title": "The same bug by a second route",
+  "raw": "les(0,\"The same bug by a second route\",[\n [\"setup\",\"Sarvam does not wait for a full sentence\",\"It marks pieces of text finished as it goes.\"],\n [\"before\",\"A finished piece ended the turn\",\"Even mid-sentence, if the gap was shorter than <code>stop_secs</code>, so no stop frame was ever sent.\"],\n [\"now\",\"A partial piece arriving after cancels that\",\"The turn stays open for the rest of the sentence.\"],\n [\"us\",\"This one reaches us\",\"The fix is triggered by a partial piece of text arriving. Our speech-to-text service does send those, so the guard can fire.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "Replying to a fragment",
+  "raw": "les(0,\"Replying to a fragment\",[\n [\"setup\",\"One spoken answer often arrives in pieces\",\"Speech-to-text splits it up.\"],\n [\"before\",\"Each piece counted as a whole turn\",\"The agent replied to the first fragment while the caller kept going.\"],\n [\"now\",\"It waits for the whole sentence\",\"\"],\n [\"us\",\"Most common on quick openings\",\"Which is exactly how people start an answer.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "The pause detector freezing after a mute",
+  "raw": "les(0,\"The pause detector freezing after a mute\",[\n [\"setup\",\"Bulk dictation judges the end with a model\",\"And we mute the caller at times, such as while the agent is speaking.\"],\n [\"before\",\"A mute could freeze that model mid-speech\",\"Later, while the agent was already replying, it would announce that the caller had stopped, which was no longer true.\"],\n [\"now\",\"It is cleared on every path that ends a turn\",\"No stale decision can surface afterwards.\"],\n [\"us\",\"This exact combination is live in production\",\"The pause model plus muting, in bulk dictation.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "Cutting in on a stale signal",
+  "raw": "les(0,\"Cutting in on a stale signal\",[\n [\"setup\",\"Signals about who is speaking can arrive late\",\"\"],\n [\"before\",\"A late stop signal still ended the turn\",\"Even though the caller had started speaking again. The agent talked over them.\"],\n [\"now\",\"An out-of-date signal is ignored\",\"\"],\n [\"us\",\"This closes the last of four\",\"Together with the three lessons before it, every route to being talked over is now shut.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "Answering twice",
+  "raw": "les(0,\"Answering twice\",[\n [\"before\",\"The agent could answer the same turn twice\",\"Or run its thinking step twice for one turn.\"],\n [\"now\",\"One answer per turn\",\"\"],\n [\"us\",\"Two thinking runs means two model calls\",\"So this cost money as well as sounding wrong.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "The wait counted thinking time twice",
+  "raw": "les(0,\"The wait counted thinking time twice\",[\n [\"setup\",\"There is a safety timer for a slow decision\",\"\"],\n [\"before\",\"Deciding time was added on top of the timer\",\"And once the model did decide early, the code waited out the full timer anyway.\"],\n [\"now\",\"Deciding time counts against the timer\",\"An early decision ends the turn straight away.\"],\n [\"now\",\"The turn now ends when the decision is made\",\"Not when a timer that was already running happens to expire. Bulk dictation reacts sooner once someone stops.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "A nudge at someone who is talking",
+  "raw": "les(0,\"A nudge at someone who is talking\",[\n [\"setup\",\"There is a gentle prompt for a caller gone quiet\",\"\"],\n [\"before\",\"It could fire at a caller who had resumed\",\"They were talking, and got nudged.\"],\n [\"now\",\"It does not\",\"\"],\n [\"us\",\"Small, but people remember it\",\"Being interrupted mid-answer is what a health worker takes away from a call.\"]\n]);"
+ },
+ {
+  "m": 0,
+  "title": "A dip between two words",
+  "raw": "les(0,\"A dip between two words\",[\n [\"setup\",\"Loudness is how it decides a voice is present\",\"Every other decision in this module sits on top of that one signal.\"],\n [\"before\",\"It was read at a single instant\",\"A dip between two syllables registered as silence.\"],\n [\"now\",\"Measured over just under half a second\",\"Which rides straight over those dips.\"],\n [\"us\",\"Fewer false quiet moments\",\"And everything else here depends on that signal being right.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "Silent forever on an empty reply",
+  "raw": "les(1,\"Silent forever on an empty reply\",[\n [\"setup\",\"A voice provider can succeed and return no audio\",\"An exhausted quota does exactly this.\"],\n [\"before\",\"The call froze permanently\",\"The caller heard nothing, and nothing recovered it.\"],\n [\"now\",\"A three second timer un-sticks it\",\"And reports a real error instead of hanging.\"],\n [\"us\",\"Google is our production voice, and it gets this\",\"A second guard stops using a voice after three silent replies in a row.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "A caller muted for the whole call",
+  "raw": "les(1,\"A caller muted for the whole call\",[\n [\"setup\",\"We mute the caller until the greeting finishes\",\"So the opening line is not talked over.\"],\n [\"before\",\"Unmuting only happened when speech finished\",\"If that first reply produced no audio, the unmute never came.\"],\n [\"now\",\"An error before the first words also lifts the mute\",\"\"],\n [\"us\",\"We use exactly this mute rule\",\"So this was a live risk, not a theoretical one.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "A turn with no speech froze the conversation",
+  "raw": "les(1,\"A turn with no speech froze the conversation\",[\n [\"before\",\"The whole call briefly froze\",\"Until a safety timer forced it onward. Seconds of dead air mid-conversation.\"],\n [\"now\",\"It moves on immediately\",\"\"],\n [\"us\",\"The error is the same either way\",\"What changed is that it no longer blocks teardown, so the call completes instead of hanging.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "A stuck audio send",
+  "raw": "les(1,\"A stuck audio send\",[\n [\"before\",\"Sending audio could block with no limit\",\"The agent went silent for the rest of the call.\"],\n [\"now\",\"Capped at ten seconds\",\"\"],\n [\"us\",\"One of several waits given a limit\",\"Before this release, several places would wait indefinitely. This one is now capped.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "A hanging setup step",
+  "raw": "les(1,\"A hanging setup step\",[\n [\"setup\",\"Starting a call means connecting several services\",\"Speech-to-text, text-to-speech, and noise removal.\"],\n [\"before\",\"If one hung, the call hung with it, indefinitely\",\"\"],\n [\"now\",\"Torn down after twenty seconds\",\"\"],\n [\"us\",\"We already wrote a guard of our own\",\"If the noise filter cannot load its model, our code lets the call run without noise removal rather than die.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "One failed cleanup blocked the rest",
+  "raw": "les(1,\"One failed cleanup blocked the rest\",[\n [\"before\",\"If one piece failed to clean up, none of the others could\",\"\"],\n [\"now\",\"Each piece cleans up on its own\",\"\"],\n [\"us\",\"This is why teardown is now reliable\",\"Recording, transcript, metrics and events all get written, even on a bad ending.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "The goodbye that never got said",
+  "raw": "les(1,\"The goodbye that never got said\",[\n [\"setup\",\"There is a closing line, and a nudge for a silent caller\",\"\"],\n [\"before\",\"Both could be silently thrown away\",\"In the worst case the call ended with no goodbye at all.\"],\n [\"now\",\"They get spoken\",\"\"],\n [\"us\",\"For a form call, the closing line is the receipt\",\"It is where the caller is told they are finished.\"]\n]);"
+ },
+ {
+  "m": 1,
+  "title": "Closing lines cut off mid-sentence",
+  "raw": "les(1,\"Closing lines cut off mid-sentence\",[\n [\"before\",\"Words already queued were cut off\",\"When one part of the call handed over, or the call wrapped up.\"],\n [\"now\",\"The handover waits for them to be spoken\",\"\"],\n [\"us\",\"The end of a call is now as reliable as the middle\",\"\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "Firefox calls could fail to connect",
+  "raw": "les(2,\"Firefox calls could fail to connect\",[\n [\"setup\",\"Connecting a browser call means swapping notes\",\"Each side describes how it can be reached.\"],\n [\"trap\",\"Firefox sends one particular marker\",\"On every single connection, without exception.\"],\n [\"before\",\"That marker crashed the code handling it\",\"So the call never started.\"],\n [\"now\",\"It is handled properly\",\"Fixed in Pipecat 1.7.0.\"],\n [\"us\",\"This is very likely the Firefox problem on our list\",\"Our notes say the call setup route crashed in Firefox once before, and has not been retried. One connect settles it.\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "Early signals dropped on a slow browser",
+  "raw": "les(2,\"Early signals dropped on a slow browser\",[\n [\"setup\",\"Some messages are sent the instant a call connects\",\"\"],\n [\"before\",\"A slow browser silently lost them\",\"One of them is the signal that shows the caller they are muted during the greeting.\"],\n [\"now\",\"They are held and delivered when ready\",\"\"],\n [\"us\",\"So a caller stops wondering why their microphone looks dead\",\"\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "Browser audio at half speed",
+  "raw": "les(2,\"Browser audio at half speed\",[\n [\"before\",\"Audio could come through slow and garbled\",\"In the case where the microphone's own rate already matched the connection's.\"],\n [\"now\",\"Handled correctly\",\"\"],\n [\"us\",\"Garbled input means garbled transcription\",\"Which means a wrong answer saved to the form.\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "A runaway loop on a broken microphone",
+  "raw": "les(2,\"A runaway loop on a broken microphone\",[\n [\"before\",\"It retried about a hundred times a second\",\"Instead of waiting. That pins the processor.\"],\n [\"now\",\"It waits properly between attempts\",\"\"],\n [\"us\",\"One caller could degrade the server for everyone else on it\",\"\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "Exotel got a field name Exotel does not use",
+  "raw": "les(2,\"Exotel got a field name Exotel does not use\",[\n [\"setup\",\"Each chunk of audio carries an identifier for the call\",\"\"],\n [\"before\",\"We sent it under a name not in Exotel's protocol\",\"They tolerated it, so nothing visibly broke.\"],\n [\"now\",\"Sent under the name they actually define\",\"\"],\n [\"us\",\"Worth an Exotel call before deploy\",\"A misread identifier sends audio nowhere and kills a call in seconds, and no test in our suite would catch it.\"]\n]);"
+ },
+ {
+  "m": 2,
+  "title": "Hanging up took ten seconds",
+  "raw": "les(2,\"Hanging up took ten seconds\",[\n [\"before\",\"Up to ten seconds per provider that would not close\",\"\"],\n [\"now\",\"Two seconds\",\"\"],\n [\"us\",\"A separate fix stops waiting on an already dead line\",\"Phone calls that drop on the provider's side now end promptly.\"]\n]);"
+ },
+ {
+  "m": 3,
+  "title": "Token counts were inflated",
+  "raw": "les(3,\"Token counts were inflated\",[\n [\"setup\",\"A model streams its reply back in small chunks\",\"Some providers repeat the running total with every chunk.\"],\n [\"before\",\"Every chunk counted as its own usage report\",\"So those totals were counted over and over.\"],\n [\"now\",\"Usage is reported once per completed reply\",\"\"],\n [\"us\",\"Our cost tracking gets this for free\",\"Whether we were over-counting depends on what OpenRouter sends per chunk. Either way the new behaviour is the correct one.\"]\n]);"
+ },
+ {
+  "m": 3,
+  "title": "Why the Overall Latency chart is gone",
+  "raw": "les(3,\"Why the Overall Latency chart is gone\",[\n [\"setup\",\"The chart added up five per-turn timings\",\"And only drew once all five had arrived.\"],\n [\"before\",\"1.8.1 stopped sending one of the five\",\"It was a measurement that never made sense for speech-to-text that runs continuously.\"],\n [\"trap\",\"So the chart would have gone blank silently\",\"Not failed loudly. Nobody would have noticed for weeks.\"],\n [\"now\",\"Chart, accumulator and reset all deleted\",\"The per-service charts and the typing indicator are untouched.\"],\n [\"us\",\"Deploy the front end first\",\"The front end only deletes things, so it is safe against the old back end. The other order leaves a broken chart in the playground for the gap between deploys.\"]\n]);"
+ },
+ {
+  "m": 3,
+  "title": "Response time measured the same for everyone",
+  "raw": "les(3,\"Response time measured the same for everyone\",[\n [\"before\",\"Some models effectively got a head start\",\"So the number was not comparable between them.\"],\n [\"now\",\"Measured identically for all\",\"\"],\n [\"us\",\"That number may shift on deploy\",\"That is it becoming correct, not a regression.\"],\n [\"us\",\"One known gap stays\",\"Our figure measures time to the first thinking token, not the first spoken word. For a reasoning model it understates the real wait.\"]\n]);"
+ },
+ {
+  "m": 3,
+  "title": "Dates read aloud in mixed languages",
+  "raw": "les(3,\"Dates read aloud in mixed languages\",[\n [\"before\",\"A month name could come out in a different language\",\"If the server's own language setting was not English.\"],\n [\"now\",\"Consistent whatever the server is set to\",\"\"],\n [\"us\",\"Directly ours\",\"Dates are one of the answer types these forms ask for and read back.\"]\n]);"
+ },
+ {
+  "m": 3,
+  "title": "The transcript did not match what was said",
+  "raw": "les(3,\"The transcript did not match what was said\",[\n [\"before\",\"The saved record could differ from the sound\",\"If the voice provider adjusted text on the way out. Logging <b>cafe</b> where the agent said <b>café</b>.\"],\n [\"now\",\"The saved record matches\",\"\"],\n [\"us\",\"Our transcripts are the product\",\"Customers read them. They are not a debugging aid.\"]\n]);"
+ },
+ {
+  "m": 4,
+  "title": "The pause detector got nine times smaller",
+  "raw": "les(4,\"The pause detector got nine times smaller\",[\n [\"setup\",\"A model judges when a caller has really finished\",\"Used in bulk dictation, loaded on the call server.\"],\n [\"num\",\"566 MB → 60 MB\",\"memory held, with no change in accuracy\"],\n [\"num\",\"5s → 0.3s\",\"to start up\"],\n [\"us\",\"It also stopped pulling in one large library\",\"Smaller install, faster restarts, less memory pressure.\"]\n]);"
+ },
+ {
+  "m": 4,
+  "title": "Agent startup roughly halved",
+  "raw": "les(4,\"Agent startup roughly halved\",[\n [\"before\",\"Everything loaded up front\",\"Whether a call needed it or not.\"],\n [\"now\",\"Rarely used pieces load when first needed\",\"\"],\n [\"us\",\"Faster restarts and deploys\",\"No effect on a call already running.\"]\n]);"
+ },
+ {
+  "m": 4,
+  "title": "Connections now open in parallel",
+  "raw": "les(4,\"Connections now open in parallel\",[\n [\"before\",\"Speech, voice and language services connected one by one\",\"\"],\n [\"now\",\"All at once\",\"\"],\n [\"us\",\"One cost sits next to it\",\"The noise filter's model cache lives inside the container image, so the model is fetched again on the first call after each deploy.\"]\n]);"
+ },
+ {
+  "m": 4,
+  "title": "Every call left a worker behind",
+  "raw": "les(4,\"Every call left a worker behind\",[\n [\"before\",\"Each call leaked an idle worker thread\",\"Building up over time.\"],\n [\"now\",\"Cleaned up when the call ends\",\"And the voice detection the call set up is now torn down once, not twice.\"],\n [\"us\",\"Our back end is long-running\",\"It takes call after call, so a per-call leak is the kind that eventually pages someone.\"]\n]);"
+ },
+ {
+  "m": 5,
+  "title": "Spoken lines started joining the agent's memory",
+  "raw": "les(5,\"Spoken lines started joining the agent's memory\",[\n [\"setup\",\"Some lines are ours, not the model's\",\"The greeting, the thank you while it thinks, a clarification, the sign-off.\"],\n [\"before\",\"1.8.1 made those join the reply model's memory by default\",\"In 1.4.0 a setting appeared for it. In 1.8.1 that setting defaults to on.\"],\n [\"trap\",\"So the agent would hear itself thanking people\",\"And be primed to keep doing it, every single turn.\"],\n [\"now\",\"We set the choice explicitly in all nine places\",\"<code>bot.py</code> passes the flag at every <code>TTSSpeakFrame</code>: on for the greeting, off for the acknowledgement, the clarification and the sign-off.\"],\n [\"us\",\"A test guards it\",\"<code>test_every_tts_speak_frame_sets_append_to_context</code> reads the source and fails if any of those nine places leaves the choice unstated.\"]\n]);"
+ },
+ {
+  "m": 5,
+  "title": "The noise filter's model had to change",
+  "raw": "les(5,\"The noise filter's model had to change\",[\n [\"setup\",\"The noise filter strips background noise before we listen\",\"Its toolkit went from 2.2.1 to 3.1.\"],\n [\"before\",\"The new toolkit cannot load the model we pinned\",\"The error is raised during call setup, so <b>the call never starts</b>.\"],\n [\"trap\",\"Every call would have failed on the first deploy\",\"Not some calls. Every one, from the first, because the failure happens while the call is being set up.\"],\n [\"now\",\"Moved to the newer model\",\"And wrapped, so a model that will not load leaves the call running without noise removal instead of killing it.\"],\n [\"us\",\"The model id is pinned in bot.py\",\"<code>AIC_MODEL_ID = &quot;quail-vf-2.2-l-16khz&quot;</code>. The old 2.1 model publishes no version the new toolkit can load.\"]\n]);"
+ },
+ {
+  "m": 5,
+  "title": "Sarvam would have jumped from v3 to v4",
+  "raw": "les(5,\"Sarvam would have jumped from v3 to v4\",[\n [\"setup\",\"Our transcription model was never named in our code\",\"We took whatever Pipecat's default was.\"],\n [\"before\",\"1.2.1 defaulted to <code>saaras:v3</code>\",\"1.8.1 defaults to <code>saaras:v4</code>.\"],\n [\"trap\",\"Upgrading would have changed the model on every call\",\"Silently, with nothing in the diff to show it.\"],\n [\"now\",\"Pinned to <code>saaras:v3</code>\",\"Five other providers were pinned at the same time, though none is reachable in production.\"],\n [\"us\",\"v4 may well be better\",\"But changing transcription underneath a turn-taking upgrade makes any regression impossible to attribute. It needs its own evaluation.\"]\n]);"
+ },
+ {
+  "m": 5,
+  "title": "Two classes were renamed",
+  "raw": "les(5,\"Two classes were renamed\",[\n [\"before\",\"Both classes that run a call were renamed\",\"And starting the runner went from one call to two.\"],\n [\"now\",\"Updated everywhere, including the recording tests\",\"No old name is left in the tree.\"],\n [\"us\",\"The old names still work, for now\",\"They print a warning and disappear in Pipecat 2.0.\"]\n]);"
+ },
+ {
+  "m": 5,
+  "title": "The Overall Latency chart was removed",
+  "raw": "les(5,\"The Overall Latency chart was removed\",[\n [\"before\",\"Four things fed that chart\",\"The chart, a per-turn accumulator, a reset called on every caller turn, and a copy of the series in the JSON view.\"],\n [\"now\",\"All four gone\",\"Nothing anywhere in the repository still mentions them.\"],\n [\"us\",\"The per-service charts and typing indicator survived\",\"They sat inside the deleted blocks and were deliberately kept.\"]\n]);"
+ },
+ {
+  "m": 6,
+  "title": "Recordings get longer",
+  "raw": "les(6,\"Recordings get longer\",[\n [\"before\",\"A real gap of silence was squashed out of the file\",\"As if the pause had never happened.\"],\n [\"now\",\"The silence is written into the file\",\"So the recording runs at the real pace of the call. Time spent waiting on a model now takes up space in the audio.\"],\n [\"us\",\"Not comparable across the deploy date\",\"If anyone investigates a step in recording durations, the deploy is the answer.\"]\n]);"
+ },
+ {
+  "m": 6,
+  "title": "Call duration steps up about 2 seconds",
+  "raw": "les(6,\"Call duration steps up about 2 seconds\",[\n [\"setup\",\"A call's length comes from its first transcript timestamp\",\"And every timestamp is written when an utterance finishes.\"],\n [\"before\",\"The greeting and first question shared one row\",\"That row is timestamped when the question finishes speaking, so the clock started late.\"],\n [\"now\",\"They are separate rows now\",\"The greeting gets its own timestamp, which is earlier by however long the first question takes to say.\"],\n [\"us\",\"Customers can see this number\",\"It is served from the analytics endpoint. The new value is the more accurate one, and the deploy date is the discontinuity.\"]\n]);"
+ },
+ {
+  "m": 6,
+  "title": "A broken API key now fails quietly",
+  "raw": "les(6,\"A broken API key now fails quietly\",[\n [\"before\",\"It logged an error several times a second\",\"Noisy. But that noise is how you noticed.\"],\n [\"now\",\"The service gives up and reports itself broken\",\"It says so once, instead of failing loudly every second.\"],\n [\"us\",\"Nothing of ours is listening for that report\",\"Until something is, a genuinely broken key just looks like silence.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "A faster Sarvam transcription service",
+  "raw": "les(7,\"A faster Sarvam transcription service\",[\n [\"setup\",\"A new Sarvam service, built for lower delay\",\"Between the caller speaking and the text arriving.\"],\n [\"us\",\"The most interesting item here\",\"That delay sits in front of everything: the pause decision, the form filling, the reply. An improvement is felt on every turn.\"],\n [\"us\",\"Nothing changes unless we switch\",\"Worth a look if transcript delay ever becomes the bottleneck.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "The newer Sarvam model, v4",
+  "raw": "les(7,\"The newer Sarvam model, v4\",[\n [\"setup\",\"<code>saaras:v4</code> adds global English\",\"On top of the Indian English and Indic languages v3 already covers.\"],\n [\"us\",\"Deliberately not taken here\",\"Our prompts, turn-stop timings and extraction rules were all tuned against v3.\"],\n [\"us\",\"It needs its own evaluation\",\"With the Pipecat upgrade already settled underneath it.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "Telling transcription which words to expect",
+  "raw": "les(7,\"Telling transcription which words to expect\",[\n [\"setup\",\"Several providers now accept a list of expected words\",\"So unusual terms are recognised more reliably.\"],\n [\"us\",\"A direct fit for these forms\",\"Anganwadi, ICDS, district and centre names, facility codes. The words a general model is weakest on and our forms depend on most.\"],\n [\"us\",\"Blocked for now\",\"Available on Google, Cartesia and Smallest. Not on Sarvam, which is what we run.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "Phone keypad presses as an answer",
+  "raw": "les(7,\"Phone keypad presses as an answer\",[\n [\"setup\",\"Key presses can now be treated as an answer\",\"Handled the same way spoken words are, rather than ignored.\"],\n [\"us\",\"Unambiguous where speech is not\",\"Good for a question with fixed options, or a number that speech-to-text keeps mishearing on a noisy line.\"],\n [\"us\",\"The path already exists\",\"We run calls over Twilio and Exotel. This is a product decision, not a technical one.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "Seconds of audio measured per call",
+  "raw": "les(7,\"Seconds of audio measured per call\",[\n [\"setup\",\"Every transcription provider now reports what it processed\",\"In seconds of audio.\"],\n [\"us\",\"Nothing to switch on\",\"We already have usage numbers enabled, so this arrives with the upgrade.\"],\n [\"us\",\"Useful next to cost tracking\",\"Today we estimate speech-to-text cost from the audio after the call. This would be a measured figure instead.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "Numbers and dates spoken more naturally",
+  "raw": "les(7,\"Numbers and dates spoken more naturally\",[\n [\"setup\",\"Numbers, money, dates and acronyms can be expanded before speaking\",\"While the written transcript keeps the original text.\"],\n [\"us\",\"These forms read numbers back for confirmation\",\"How a centre code or a number of months is spoken decides whether the caller can confirm it.\"],\n [\"us\",\"Available for Google, our production voice\",\"Off unless we turn it on.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "Thinking time measured apart from answering",
+  "raw": "les(7,\"Thinking time measured apart from answering\",[\n [\"setup\",\"A new measurement splits the two\",\"Silent thinking, then the first word of the actual answer.\"],\n [\"us\",\"Sharper than what we have\",\"Our figure measures time to the first thinking token, so for a reasoning model it understates the caller's real wait.\"],\n [\"us\",\"Left out on purpose\",\"Adopting it touches the latency observer, the metrics file and the analytics reading that file. More than a version bump should carry.\"]\n]);"
+ },
+ {
+  "m": 7,
+  "title": "New events for saving each turn's audio",
+  "raw": "les(7,\"New events for saving each turn's audio\",[\n [\"setup\",\"The two events we use fire once per run of speech\",\"Several times a turn, carrying no turn number.\"],\n [\"now\",\"The replacements fire once per turn\",\"And include which turn it was.\"],\n [\"trap\",\"The two we use are removed in Pipecat 2.0\",\"Deprecated as of 1.8.0.\"],\n [\"us\",\"Our version limit protects us\",\"We pinned Pipecat below 2.0 on purpose, for exactly this reason.\"],\n [\"us\",\"The natural first task when caller audio comes back\",\"The replacements are also a closer fit to what our code already does.\"]\n]);"
+ }
+]
