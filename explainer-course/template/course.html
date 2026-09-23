@@ -205,6 +205,8 @@
   .li[data-skip="1"]{color:var(--stop-ink)}
   .li[data-skip="1"] .dot{border-color:var(--stop)}
   .li[data-skip="1"][data-done="1"] .dot{background:var(--stop);border-color:var(--stop)}
+  .slide[data-k="step"]{border-left-color:var(--warm)}
+  .slide[data-k="step"] .kind{color:var(--warm)}
   .slide[data-k="take"],.slide[data-k="what"]{border-left-color:var(--warm)}
   .slide[data-k="take"] .kind,.slide[data-k="what"] .kind{color:var(--warm)}
 
@@ -286,7 +288,7 @@ var KEY="{{STORAGE_KEY}}", seen={}, vis={}, autoed={};
 try{ var st=JSON.parse(localStorage.getItem(KEY)||"{}")||{};
      seen=st.done||{}; vis=st.slides||{}; autoed=st.autoed||{}; }catch(e){ seen={}; vis={}; autoed={}; }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify({done:seen,slides:vis,autoed:autoed})); }catch(e){} }
-function slidesSeen(li){ var v=vis[li]||{},n=0; for(var k in v) if(v[k]) n++; return n; }
+function slidesSeen(li){ var v=vis[li]||{},n=0; for(var k in v) if(v[k]) n++; return Math.min(n,L[li].s.length); }
 
 var at=0, open={};
 L.forEach(function(l){ open[l.m]=false; }); open[0]=true;
@@ -337,21 +339,14 @@ function buildSide(){
   tnum.textContent=d+" / "+L.length+" lessons";
 }
 
-/* ===== diagrams ===== */
-/* ===== diagrams: portrait canvas 460x440, sized to fill the slide height ===== */
-var S='<svg viewBox="0 0 460 440" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">';
-function box(x,y,w,h,fill,stroke){return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6" fill="'+fill+'" stroke="'+(stroke||"none")+'" stroke-width="1.6"/>';}
-function tx(x,y,s,sz,col,anc,w){return '<text x="'+x+'" y="'+y+'" font-size="'+(sz||14)+'" fill="'+(col||"var(--faint)")+'" text-anchor="'+(anc||"start")+'"'+(w?' font-weight="700"':'')+'>'+s+'</text>';}
-function cap(y,s,col){return tx(0,y,s,12,col||"var(--faint)",null,1);}
-function arrow(x1,y1,x2,y2){return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah)"/>';}
-var DEFS='<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--faint)"/></marker></defs>';
 var VIS={};
 
 var BOX={before:"{{BEFORE_LABEL}}",now:"{{NOW_LABEL}}",us:"{{US_LABEL}}"};
 // three plain boxes that repeat the slide's text in one line each
 function simple3(o){
+  var lb=o.labels||[BOX.before,BOX.now,BOX.us];
   function box(cls,label,text){ return '<div class="s3 '+cls+'"><b>'+label+'</b>'+text+'</div>'; }
-  return '<div class="cp s3wrap">'+box("b",BOX.before,o.before)+box("a",BOX.now,o.after)+box("u",BOX.us,o.us)+'</div>';
+  return '<div class="cp s3wrap">'+box("b",lb[0],o.before)+box("a",lb[1],o.after)+box("u",lb[2],o.us)+'</div>';
 }
 /* ===== GEN VIS ===== */
 /* ===== END GEN VIS ===== */
@@ -376,6 +371,7 @@ function render(){
 
   var kind=s[0];
   var label={over:"What this is about",setup:"Setup",trap:"The trap",before:"Before",now:"Now",us:"What it means for us",num:"By the numbers",skip:"Not relevant to us",avail:"Improvement available. Not used yet",take:"What adopting it would take",what:"What it is"}[kind]||"";
+  if(kind==="step") label="Step "+f.si+" of "+(l.s.length-1);
   slideEl.setAttribute("data-k",kind);
 
   var head;

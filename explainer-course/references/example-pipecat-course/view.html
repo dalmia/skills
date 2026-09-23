@@ -206,6 +206,8 @@
   .li[data-skip="1"]{color:var(--stop-ink)}
   .li[data-skip="1"] .dot{border-color:var(--stop)}
   .li[data-skip="1"][data-done="1"] .dot{background:var(--stop);border-color:var(--stop)}
+  .slide[data-k="step"]{border-left-color:var(--warm)}
+  .slide[data-k="step"] .kind{color:var(--warm)}
   .slide[data-k="take"],.slide[data-k="what"]{border-left-color:var(--warm)}
   .slide[data-k="take"] .kind,.slide[data-k="what"] .kind{color:var(--warm)}
 
@@ -277,31 +279,18 @@ var M=[
  ["On the shelf","Now possible, not taken"]
 ];
 
-// slide = [kind, headline, body]   kinds: setup trap before now us num demo
+// slide = [kind, headline, body, visKey, whyBox]   kinds: over step skip avail (before now us num setup trap kept for colour)
 var L=[];
 function les(m,t,s){L.push({m:m,t:t,s:s});}
 
 /* ---------- M1 turn-taking ---------- */
 les(0,"The pause that ended turns early",[
- ["over","If a caller paused mid-answer, the agent answered anyway","The caller paused for half a second in the middle of an answer, then carried on. The agent took the first half as the whole answer and started replying while the caller was still talking. This lesson traces that failure through the code step by step, then shows the fix.","split"],
- ["setup","First, what a turn is","A turn is one person\'s go at speaking. The caller\'s turn opens when the caller starts answering and closes when the agent decides the caller has finished. This lesson is about that closing decision.","turn"],
- ["setup","Closing a turn is a judgement call","Close the turn too early and the agent cuts the caller off. Close it too late and the agent feels slow. Our config sets <code>user_speech_timeout=0.4</code>: once the caller\'s latest words have arrived, the agent waits 0.4 seconds for more before closing the turn.","hard"],
- ["setup","One question, two inputs","One piece of code closes the turn. Its only job is to decide whether the caller has finished. Pipecat calls this piece a <b>stop strategy</b>. Ours is <code>SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=0.4)</code>, chosen in <code>dictation_mode.py</code>. It has two inputs to decide from. Pipecat delivers both as <b>frames</b>: small messages passed along the call pipeline.","pipeline"],
- ["setup","Input 1: is the caller making sound right now","<code>SileroVADAnalyzer</code> does voice activity detection, VAD for short. It listens to the caller\'s incoming speech and answers one question: is the caller making sound at this instant. It cannot read words. It reports by sending <code>VADUserStartedSpeakingFrame</code> and <code>VADUserStoppedSpeakingFrame</code>. Our config sets <code>stop_secs=0.2</code>, so the caller must be quiet for 0.2 seconds before it sends a stop frame. In 1.2.1 the stop strategy wrote these frames down in two fields.","vadtrack"],
- ["setup","A real pause is handled correctly","The caller goes quiet. After 0.2 seconds, <code>SileroVADAnalyzer</code> sends <code>VADUserStoppedSpeakingFrame</code>. The stop strategy sets <code>_vad_user_speaking</code> to <code>False</code> and records the time in <code>_vad_stopped_time</code>. When the caller resumes, <code>SileroVADAnalyzer</code> sends <code>VADUserStartedSpeakingFrame</code>, and the stop strategy sets <code>_vad_user_speaking</code> back to <code>True</code>, clears <code>_vad_stopped_time</code>, and cancels any pending timer. A real pause was never the problem.","pause"],
- ["setup","Input 2: the words, which arrive late","<code>SarvamSTTService</code> does not send words while the caller is talking. When <code>SileroVADAnalyzer</code> sends a stop frame, Pipecat tells Sarvam to flush, and Sarvam returns one <code>TranscriptionFrame</code> holding everything said so far. That frame arrives some time after the pause began. Pipecat\'s own worst-case figure for Sarvam is 1.17 seconds. By then the caller may already be talking again.","late"],
- ["trap","Our turn opens on that late transcript","<code>MinWordsUserTurnStartStrategy(min_words=1)</code> opens the caller\'s turn on the first <code>TranscriptionFrame</code>. If the caller paused briefly and carried on, that frame lands after the caller has resumed. So the turn opens while the caller is mid-sentence.","turnstart"],
- ["before","Opening the turn reset the stop strategy","<code>UserTurnController</code> hands each frame to the start strategy first and the stop strategy second. When the start strategy opens a turn, the controller calls <code>reset()</code> on the stop strategy, before the same transcript reaches it. In 1.2.1, <code>reset()</code> set <code>_vad_user_speaking</code> to <code>False</code> and <code>_vad_stopped_time</code> to <code>None</code>. The caller was still speaking, and <code>SileroVADAnalyzer</code> sent nothing new, because it only sends a start frame after a stop frame.","wipe"],
- ["before","Those two values together mean something specific","<code>_vad_user_speaking</code> <code>False</code> with <code>_vad_stopped_time</code> <code>None</code> means no VAD frame has arrived this turn at all. A real pause cannot produce that, because a real pause records a stop time. While someone is talking, only the reset produces it.","bothfalse"],
- ["before","The transcript then took the wrong branch","Sarvam's transcript now reaches the code that closes turns. That code asks one question: has VAD told me nothing at all this turn? If the answer is yes, it assumes VAD is not in use and starts its own 0.4 second timer to close the turn. The reset had just erased both VAD notes, so the answer came out yes, even though VAD had been reporting all along and the caller was still talking. The timer started.","branch"],
- ["before","That branch starts the 0.4 second timer","The branch calls <code>_restart_user_speech_timer()</code>, which closes the turn 0.4 seconds after this transcript unless a new VAD frame cancels it first. The caller is mid-sentence, so <code>SileroVADAnalyzer</code> sends nothing. The timer expires and the turn closes while the caller is still talking.","timer"],
- ["before","What lands in the transcript","The NEXT REPLY LLM answers the first half. The words after the pause come back later as a new caller turn of their own. Two caller rows around one agent row, for a single spoken answer, is the fingerprint of this bug.","hindi"],
- ["demo","Watch it happen","Six seconds of a call, with illustrative timings. Press Play. Press Show to switch between 1.2.1 and 1.8.1. Play it again."],
- ["now","The fix: opening a turn leaves _vad_user_speaking alone","Pipecat 1.6.0 (PR #4983) stopped the turn opening from clearing <code>_vad_user_speaking</code>. In 1.8.1 the controller calls <code>handle_user_turn_started()</code>, which runs <code>_reset(clear_vad_user_speaking=False)</code>. Closing a turn still clears it. Pipecat\'s own comment on the method gives the reason: the flag reflects live VAD state, not per-turn bookkeeping.","fixtrack"],
- ["now","So the wrong branch is no longer taken","The notes VAD wrote are left alone when the turn opens, so the code still knows the caller is talking. The answer to its question is no. It keeps the turn open and waits for VAD to report that the caller has really stopped.","branch2"],
- ["us","You can now read Pipecat\'s own description","<i>&ldquo;&hellip;ended the user turn mid-utterance when a new turn&rsquo;s reset() cleared VAD speaking state while the user was still talking.&rdquo;</i> Every term in that sentence is one you have now met. It goes on to mention a finalized transcript. Ours are never finalized, but the branch never checked, so the bug reached us all the same.","quote"],
- ["us","How to see it for yourself","No automated test covers this, because the fix is in Pipecat, not in our code. On the branch, make a call and answer a question in two halves, pausing about half a second between them. The pause has to be longer than 0.2 seconds, so VAD reports a stop, and short enough that you resume before Sarvam\'s transcript comes back. Then open <code>transcript.json</code> and count the caller rows for that answer.","bars"],
- ["us","Pipecat 1.6.0, PR #4983. No code from us","Nothing in our diff implements this fix. We get it by upgrading. That is the reason this PR exists.","pr"]
+ ["over", "If a caller paused mid-answer, the agent answered anyway. Fixed by upgrading", "The caller paused for about half a second in the middle of an answer, then carried on. The agent took the first half as the whole answer and started replying while the caller was still talking. The cause: when a caller’s turn opened, Pipecat 1.2.1 erased VAD’s note of whether the caller was still talking. Pipecat 1.6.0 (PR #4983) leaves that note alone, so the turn waits for a real stop. Nothing in our code changed. We get the fix by upgrading, and that is the reason this PR exists. The next five slides walk through it step by step.", "l1a"],
+ ["step", "What a turn is", "A turn is one person’s go at speaking. The caller’s turn opens when the caller starts answering and closes when the agent decides the caller has finished. Close it too early and the agent cuts the caller off. Close it too late and the agent feels slow. This lesson is about that closing decision.", "l1b"],
+ ["step", "Pipecat uses two inputs to close a turn: VAD and Sarvam STT", "To decide that the caller has finished, Pipecat uses two inputs. VAD listens to the caller’s audio and reports only two things: the caller started making sound, the caller stopped. It cannot read words. Our setting: the caller must be quiet for 0.2 seconds before VAD reports a stop. Sarvam STT sends the words, but only after the caller pauses, as one transcript, up to about a second late. While it waits for the words, Pipecat keeps a note of VAD’s last report: is the caller talking right now.", "l1c"],
+ ["step", "The transcript arrives late and erases the note", "The caller pauses half a second mid-answer and carries on. VAD reports a stop, then a start. Sarvam’s transcript of the first half arrives after the caller has already resumed, and that transcript is what opens the caller’s turn. In 1.2.1, opening a turn erased VAD’s note back to “not talking”. VAD had no reason to report a start again, so the note stayed wrong.", "l1d"],
+ ["step", "Pipecat thought VAD was not in use and started a 0.4 second timer", "With the note erased, Pipecat checked whether VAD had reported anything this turn. The erased note made it look as if VAD had not, so Pipecat assumed VAD was not in use and started its own 0.4 second timer. The caller kept talking, VAD sent nothing new, the timer ran out, and the turn closed mid-sentence. The NEXT REPLY LLM answered the first half. The rest came back later as a new turn. Two caller rows around one agent row, for one spoken answer, is how you spot this in a transcript.", "l1e"],
+ ["step", "The fix: opening a turn leaves VAD’s note alone. Fixed by upgrading", "In 1.2.1, opening a turn erased VAD’s note, so the turn closed before the caller finished. Pipecat 1.6.0 (PR #4983): opening a turn leaves VAD’s note alone. Only VAD changes it. So the turn stays open until VAD reports a real stop after the caller finishes. Fixed by upgrading. Nothing to do. To see it yourself on the branch: make a call, answer a question in two halves with about half a second of pause between them, then open <code>transcript.json</code> and count the caller rows for that answer. One row now. Two before.", "l1f"]
 ]);
 /* ===== GEN LESSONS ===== */
 les(0,"A transcript marked finished mid-sentence",[
@@ -452,11 +441,11 @@ var FLAT=[];
 L.forEach(function(l,li){ l.s.forEach(function(s,si){ FLAT.push({li:li,si:si}); }); });
 function startOf(li){ for(var i=0;i<FLAT.length;i++) if(FLAT[i].li===li) return i; return 0; }
 
-var KEY="pc-course-v4", seen={}, vis={}, autoed={};
+var KEY="pc-course-v5", seen={}, vis={}, autoed={};
 try{ var st=JSON.parse(localStorage.getItem(KEY)||"{}")||{};
      seen=st.done||{}; vis=st.slides||{}; autoed=st.autoed||{}; }catch(e){ seen={}; vis={}; autoed={}; }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify({done:seen,slides:vis,autoed:autoed})); }catch(e){} }
-function slidesSeen(li){ var v=vis[li]||{},n=0; for(var k in v) if(v[k]) n++; return n; }
+function slidesSeen(li){ var v=vis[li]||{},n=0; for(var k in v) if(v[k]) n++; return Math.min(n,L[li].s.length); }
 
 var at=0, open={};
 L.forEach(function(l){ open[l.m]=false; }); open[0]=true;
@@ -507,362 +496,18 @@ function buildSide(){
   tnum.textContent=d+" / "+L.length+" lessons";
 }
 
-/* ===== diagrams ===== */
-/* ===== diagrams: portrait canvas 460x440, sized to fill the slide height ===== */
-var S='<svg viewBox="0 0 460 440" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">';
-function box(x,y,w,h,fill,stroke){return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6" fill="'+fill+'" stroke="'+(stroke||"none")+'" stroke-width="1.6"/>';}
-function tx(x,y,s,sz,col,anc,w){return '<text x="'+x+'" y="'+y+'" font-size="'+(sz||14)+'" fill="'+(col||"var(--faint)")+'" text-anchor="'+(anc||"start")+'"'+(w?' font-weight="700"':'')+'>'+s+'</text>';}
-function cap(y,s,col){return tx(0,y,s,12,col||"var(--faint)",null,1);}
-function arrow(x1,y1,x2,y2){return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah)"/>';}
-var DEFS='<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--faint)"/></marker></defs>';
 var VIS={};
-
-VIS.split=function(){return S+DEFS+
- cap(16,"WHAT THE CALLER SAID")+
- box(0,28,215,44,"var(--go)")+tx(14,56,"मरीज़ को बुखार है",16,"#08231a")+
- box(262,28,198,44,"var(--go)")+tx(276,56,"तीन दिन से",16,"#08231a")+
- '<path d="M221 50 L256 50" stroke="var(--faint)" stroke-width="1.4" stroke-dasharray="4 4"/>'+
- tx(238,32,"0.5s",12,"var(--faint)","middle")+
- cap(136,"WHAT THE AGENT DID","var(--stop)")+
- box(0,148,215,44,"var(--go)")+tx(14,176,"मरीज़ को बुखार है",16,"#08231a")+
- box(262,148,198,44,"var(--go)")+tx(276,176,"तीन दिन से",16,"#08231a")+
- '<line x1="300" y1="136" x2="300" y2="200" stroke="var(--stop)" stroke-width="2.5"/>'+
- tx(300,220,"turn closed here, mid-word",13,"var(--stop)","middle",1)+
- box(310,236,150,40,"var(--warm)")+tx(322,262,"agent replies",14,"#2a1305")+
- cap(312,"WHAT THE CALLER HEARD NEXT")+
- box(0,324,460,64,"none","var(--stop)")+
- tx(16,350,"बुखार कितने दिन से है?",15,"var(--ink)")+
- tx(16,374,"asked for what they were already saying",13,"var(--stop)")+
- tx(0,426,"The agent spoke over the caller.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.quote=function(){return S+
- cap(18,"PIPECAT CHANGELOG, 1.6.0")+
- box(0,32,460,250,"var(--sink)","var(--edge)")+
- tx(18,64,"Fixed",14,"var(--go)",null,1)+
- tx(18,90,"SpeechTimeoutUserTurnStopStrategy",12,"var(--ink)")+
- tx(18,114,"ending the user turn mid-utterance",13,"var(--ink)")+
- tx(18,138,"when a new turn's reset() cleared VAD",13,"var(--ink)")+
- tx(18,162,"speaking state while the user was",13,"var(--ink)")+
- tx(18,186,"still talking.",13,"var(--ink)")+
- tx(18,222,"...user_speech_timeout falsely",13,"var(--stop)")+
- tx(18,246,"ended the turn.",13,"var(--stop)")+
- tx(18,270,"PR #4983",12,"var(--faint)")+
- tx(0,322,"Both classes it names are ours.",15,"var(--ink)",null,1)+
- box(0,344,460,80,"var(--go-bg)","var(--go)")+
- tx(16,374,"MinWordsUserTurnStartStrategy",12,"var(--ink)")+
- tx(16,400,"SpeechTimeoutUserTurnStopStrategy",12,"var(--ink)")+
- '</svg>';};
-
-VIS.turn=function(){return S+
- cap(18,"A CALL IS TURNS, ONE AFTER ANOTHER")+
- box(0,32,460,44,"var(--warm)")+tx(16,60,"agent: how long has the fever lasted?",13,"#2a1305")+
- box(0,92,460,44,"var(--go)")+tx(16,120,"caller: the patient has fever, three days",13,"#08231a")+
- box(0,152,460,44,"var(--warm)")+tx(16,180,"agent: next question",13,"#2a1305")+
- tx(0,240,"The green row is one caller turn.",15,"var(--ink)",null,1)+
- box(0,264,460,96,"var(--go-bg)","var(--go)")+
- tx(16,294,"OPENS   when the caller starts answering",13,"var(--ink)")+
- '<text x="16" y="334" font-size="12.5" fill="var(--ink)">CLOSES  when the agent decides <tspan fill="var(--go)" font-weight="700">the caller has finished</tspan></text>'+
- tx(0,400,"This lesson is about that closing decision.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.hard=function(){return S+
- cap(18,"CLOSE TOO EARLY")+
- box(0,32,150,38,"var(--go)")+box(190,32,150,38,"var(--go)")+
- '<line x1="168" y1="24" x2="168" y2="78" stroke="var(--stop)" stroke-width="2.5"/>'+
- tx(0,96,"the agent cuts the caller off",13,"var(--stop)")+
- cap(140,"CLOSE TOO LATE")+
- box(0,154,150,38,"var(--go)")+box(190,154,150,38,"var(--go)")+
- '<line x1="430" y1="146" x2="430" y2="200" stroke="var(--warm)" stroke-width="2.5"/>'+
- tx(0,218,"the agent feels slow",13,"var(--warm)")+
- box(0,252,460,96,"var(--sink)","var(--edge)")+
- tx(18,282,"Our config: user_speech_timeout=0.4",14,"var(--ink)")+
- tx(18,310,"wait 0.4s after the latest words",15,"var(--go)",null,1)+
- tx(18,334,"arrive, then close the turn",15,"var(--go)",null,1)+
- tx(0,392,"The bug was that this 0.4 second",14,"var(--soft)")+
- tx(0,416,"timer started while the caller",14,"var(--soft)")+
- tx(0,440,"was still talking.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.pipeline=function(){return S+DEFS+
- box(0,34,130,46,"var(--sink)","var(--edge)")+tx(65,62,"caller speech",13,"var(--ink)","middle")+
- arrow(134,57,168,57)+
- box(172,4,288,46,"var(--sink)","var(--edge)")+tx(316,32,"SileroVADAnalyzer",13,"var(--ink)","middle")+
- box(172,64,288,46,"var(--sink)","var(--edge)")+tx(316,92,"SarvamSTTService (STT)",13,"var(--ink)","middle")+
- cap(156,"THE TWO INPUTS, AS FRAMES")+
- tx(0,182,"VADUserStartedSpeakingFrame",13,"var(--go)")+
- tx(0,204,"VADUserStoppedSpeakingFrame",13,"var(--go)")+
- tx(0,226,"TranscriptionFrame(finalized=…)",12,"var(--warm)")+
- cap(266,"THE STOP STRATEGY THAT DECIDES")+
- box(0,278,460,96,"var(--go-bg)","var(--go)")+
- tx(18,306,"SpeechTimeoutUserTurnStopStrategy(",14,"var(--ink)")+
- tx(38,332,"user_speech_timeout=0.4",14,"var(--go)")+
- tx(18,358,")",14,"var(--ink)")+
- tx(0,412,"Chosen in dictation_mode.py for the",13,"var(--faint)")+
- tx(0,436,"interview path: one question at a time.",13,"var(--faint)")+
- '</svg>';};
-
-function trk(y,label,segs){var s=cap(y-10,label);
- segs.forEach(function(g){s+=box(g[0],y,g[1],34,g[2]);});return s;}
-
-VIS.vadtrack=function(){return S+
- trk(30,"CALLER SPEECH",[[0,460,"var(--go)"]])+
- '<line x1="0" y1="72" x2="0" y2="96" stroke="var(--go)" stroke-width="2.5"/>'+
- tx(0,116,"VADUserStartedSpeakingFrame sent",12,"var(--go)")+
- cap(160,"TWO FIELDS THE STOP STRATEGY KEEPS (1.2.1)")+
- box(0,174,460,60,"var(--go-bg)","var(--go)")+
- tx(16,200,"_vad_user_speaking",13,"var(--ink)")+tx(330,200,"True",14,"var(--go)",null,1)+
- tx(16,222,"True after a start frame, False after a stop",11,"var(--soft)")+
- box(0,244,460,60,"var(--sink)","var(--edge)")+
- tx(16,270,"_vad_stopped_time",13,"var(--ink)")+tx(330,270,"None",14,"var(--faint)",null,1)+
- tx(16,292,"time of this turn's stop frame, or None",11,"var(--soft)")+
- box(0,330,460,94,"var(--sink)","var(--edge)")+
- tx(16,360,"Our config: stop_secs=0.2",14,"var(--ink)")+
- tx(16,388,"The caller must be quiet for 0.2s",13,"var(--soft)")+
- tx(16,412,"before a stop frame is sent.",13,"var(--soft)")+
- '</svg>';};
-
-VIS.pause=function(){return S+
- trk(30,"CALLER SPEECH, WITH A REAL PAUSE",[[0,190,"var(--go)"],[270,190,"var(--go)"]])+
- tx(252,52,"0.5s",12,"var(--faint)","middle")+
- '<line x1="224" y1="20" x2="224" y2="74" stroke="var(--go)" stroke-width="2.5"/>'+
- '<line x1="296" y1="20" x2="296" y2="74" stroke="var(--go)" stroke-width="2.5"/>'+
- tx(220,94,"stop frame, 0.2s in",11,"var(--go)","end")+
- tx(300,94,"start frame",11,"var(--go)")+
- cap(126,"DURING THE PAUSE")+
- box(0,136,460,54,"var(--sink)","var(--edge)")+
- tx(16,160,"_vad_user_speaking",12,"var(--ink)")+tx(330,160,"False",13,"var(--faint)",null,1)+
- tx(16,180,"_vad_stopped_time",12,"var(--ink)")+tx(330,180,"the stop time",13,"var(--go)",null,1)+
- cap(222,"AFTER THE CALLER RESUMES")+
- box(0,232,460,54,"var(--go-bg)","var(--go)")+
- tx(16,256,"_vad_user_speaking",12,"var(--ink)")+tx(330,256,"True",13,"var(--go)",null,1)+
- tx(16,276,"_vad_stopped_time",12,"var(--ink)")+tx(330,276,"None",13,"var(--faint)",null,1)+
- box(0,310,460,66,"var(--sink)","var(--edge)")+
- tx(18,338,"Both fields match what the caller",14,"var(--ink)")+
- tx(18,362,"is doing, and any timer is cancelled.",14,"var(--ink)")+
- tx(0,414,"A real pause was never the problem.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.late=function(){return S+
- trk(30,"CALLER SPEECH",[[0,190,"var(--go)"],[270,190,"var(--go)"]])+
- '<line x1="224" y1="20" x2="224" y2="74" stroke="var(--go)" stroke-width="2.5"/>'+
- tx(220,94,"stop frame",11,"var(--go)","end")+
- tx(220,110,"Sarvam told to flush",11,"var(--go)","end")+
- '<line x1="330" y1="20" x2="330" y2="132" stroke="var(--warm)" stroke-width="2.5"/>'+
- '<circle cx="330" cy="132" r="6" fill="var(--warm)"/>'+
- tx(330,150,"TranscriptionFrame",12,"var(--warm)",null,1)+
- tx(340,168,"arrives here",12,"var(--warm)")+
- cap(214,"WHAT THE FRAME CARRIES")+
- box(0,226,460,76,"var(--warm-bg)","var(--warm)")+
- tx(16,256,"text: मरीज़ को बुखार है",15,"var(--ink)")+
- tx(16,284,"finalized: False, always, for Sarvam",12,"var(--soft)")+
- box(0,324,460,100,"var(--sink)","var(--edge)")+
- tx(16,354,"It holds only the first half, and it",14,"var(--ink)")+
- tx(16,378,"arrives after the caller has already",14,"var(--ink)")+
- tx(16,402,"started the second half.",14,"var(--ink)")+
- '</svg>';};
-
-VIS.turnstart=function(){return S+
- trk(40,"CALLER SPEECH",[[0,190,"var(--go)"],[270,190,"var(--go)"]])+
- '<line x1="330" y1="30" x2="330" y2="92" stroke="var(--warm)" stroke-width="2.5"/>'+
- '<circle cx="330" cy="92" r="6" fill="var(--warm)"/>'+
- tx(318,112,"transcript arrives",13,"var(--warm)","end")+
- tx(318,134,"min_words=1 is satisfied",13,"var(--warm)","end")+
- tx(318,156,"the turn opens",13,"var(--warm)","end")+
- box(270,180,190,38,"var(--warm-bg)")+tx(282,205,"turn open",14,"var(--warm-ink)")+
- tx(0,268,"The turn opens while the caller",16,"var(--ink)",null,1)+
- tx(0,294,"is saying the second half.",16,"var(--ink)",null,1)+
- box(0,324,460,96,"var(--sink)","var(--edge)")+
- tx(16,354,"If the caller had stayed quiet,",14,"var(--soft)")+
- tx(16,378,"the same thing would be harmless:",14,"var(--soft)")+
- tx(16,402,"the turn really would be over.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.wipe=function(){return S+
- trk(40,"CALLER SPEECH, SECOND HALF",[[0,460,"var(--go)"]])+
- '<line x1="60" y1="30" x2="60" y2="100" stroke="var(--warm)" stroke-width="2" stroke-dasharray="4 4"/>'+
- tx(68,96,"turn opens, reset() runs",12,"var(--warm)")+
- tx(0,124,"SileroVADAnalyzer sends nothing new.",12,"var(--faint)")+
- cap(160,"BOTH FIELDS, JUST AFTER reset() (1.2.1)")+
- box(0,172,460,60,"var(--stop-bg)","var(--stop)")+
- tx(16,198,"_vad_user_speaking",13,"var(--ink)")+
- tx(310,198,"True → False",13,"var(--stop)",null,1)+
- tx(16,220,"set to False by reset()",11,"var(--soft)")+
- box(0,242,460,60,"var(--stop-bg)","var(--stop)")+
- tx(16,268,"_vad_stopped_time",13,"var(--ink)")+
- tx(310,268,"None",13,"var(--stop)",null,1)+
- tx(16,290,"set to None by reset()",11,"var(--soft)")+
- box(0,322,460,102,"var(--stop-bg)","var(--stop)")+
- tx(18,352,"The caller is still talking.",15,"var(--ink)")+
- tx(18,380,"The fields now say no VAD frame",14,"var(--stop)")+
- tx(18,404,"has arrived this turn.",14,"var(--stop)")+
- '</svg>';};
-
-VIS.bothfalse=function(){return S+
- cap(18,"WHAT EACH COMBINATION MEANS (1.2.1)")+
- box(0,32,460,66,"var(--sink)","var(--edge)")+
- tx(16,58,"speaking=True    stopped_time=None",12,"var(--ink)")+
- tx(16,82,"start frame arrived, no stop since",12,"var(--go)")+
- box(0,108,460,66,"var(--sink)","var(--edge)")+
- tx(16,134,"speaking=False   stopped_time=a time",12,"var(--ink)")+
- tx(16,158,"stop frame arrived. handled correctly",12,"var(--go)")+
- box(0,184,460,66,"var(--stop-bg)","var(--stop)")+
- tx(16,210,"speaking=False   stopped_time=None",12,"var(--ink)")+
- tx(16,234,"no VAD frame arrived this turn",12,"var(--stop)")+
- tx(0,290,"Only the third combination takes",15,"var(--ink)",null,1)+
- tx(0,314,"the fallback branch.",15,"var(--ink)",null,1)+
- box(0,338,460,86,"var(--sink)","var(--edge)")+
- tx(16,368,"A real pause can never reach it,",13,"var(--soft)")+
- tx(16,392,"because a real pause records",13,"var(--soft)")+
- tx(16,416,"a stop time.",13,"var(--soft)")+
- '</svg>';};
-
-function flow(hot){
- return S+DEFS+
- box(80,0,300,46,"var(--sink)","var(--edge)")+tx(230,29,"Sarvam's transcript arrives",13,"var(--ink)","middle")+
- arrow(230,50,230,78)+
- box(0,84,460,50,"var(--sink)","var(--edge)")+
- tx(230,108,"Has VAD told me nothing",13,"var(--ink)","middle")+
- tx(230,126,"at all this turn?",13,"var(--ink)","middle")+
- arrow(160,138,120,176)+arrow(300,138,340,176)+
- tx(100,164,"Yes",13,hot?"var(--stop)":"var(--faint)",null,1)+
- tx(336,164,"No",13,hot?"var(--faint)":"var(--go)",null,1)+
- box(0,182,215,120,hot?"var(--stop-bg)":"var(--sink)",hot?"var(--stop)":"var(--edge)")+
- tx(107,212,"Assume VAD is not in use.",11,"var(--ink)","middle")+
- tx(107,234,"Start a 0.4 second timer.",11,"var(--ink)","middle")+
- tx(107,262,"Close the turn when",11,"var(--ink)","middle")+
- tx(107,282,"it runs out.",11,"var(--ink)","middle")+
- box(245,182,215,120,hot?"var(--sink)":"var(--go-bg)",hot?"var(--edge)":"var(--go)")+
- tx(352,212,"Keep the turn open.",11,"var(--ink)","middle")+
- tx(352,234,"Wait for VAD to say",11,"var(--ink)","middle")+
- tx(352,262,"the caller has",11,"var(--ink)","middle")+
- tx(352,282,"really stopped.",11,"var(--ink)","middle")+
- tx(107,322,hot?"↑ TAKEN":"",12,"var(--stop)","middle",1)+
- tx(352,322,hot?"":"↑ TAKEN",12,"var(--go)","middle",1)+
- box(0,344,460,96,hot?"var(--stop-bg)":"var(--go-bg)",hot?"var(--stop)":"var(--go)")+
- tx(18,376,hot?"The reset had erased VAD's notes,":"VAD's notes are left alone, so the",14,"var(--ink)")+
- tx(18,400,hot?"so the answer was wrongly yes.":"answer is no. The turn closes only",14,"var(--ink)")+
- tx(18,424,hot?"The turn closed mid-sentence.":"when the caller really stops.",14,"var(--ink)")+
- '</svg>';}
-VIS.branch=function(){return flow(true);};
-VIS.branch2=function(){return flow(false);};
-
-VIS.timer=function(){return S+
- trk(40,"CALLER SPEECH, SECOND HALF",[[0,460,"var(--go)"]])+
- '<line x1="60" y1="30" x2="60" y2="92" stroke="var(--warm)" stroke-width="2.5"/>'+
- tx(68,110,"transcript arrives, timer starts",12,"var(--warm)")+
- trk(160,"user_speech_timeout = 0.4s",[[60,150,"var(--stop-bg)"]])+
- '<line x1="210" y1="150" x2="210" y2="210" stroke="var(--stop)" stroke-width="2.5"/>'+
- tx(218,188,"timer expires",14,"var(--stop)",null,1)+
- tx(218,208,"the turn closes",13,"var(--stop)")+
- box(0,236,460,96,"var(--stop-bg)","var(--stop)")+
- tx(18,268,"The caller is still speaking.",15,"var(--ink)")+
- tx(18,292,"No new VAD frame comes to cancel",15,"var(--ink)")+
- tx(18,316,"the timer, so nothing stops it.",15,"var(--stop)")+
- tx(0,376,"The timer counts from the transcript,",14,"var(--soft)")+
- tx(0,400,"not from the last sound the caller",14,"var(--soft)")+
- tx(0,424,"made.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.hindi=function(){var s=cap(18,"HOW IT LANDS IN transcript.json");
- s+=box(0,32,460,56,"var(--stop-bg)","var(--stop)")+tx(14,54,'role: "user"',12,"var(--stop)")+tx(14,78,"मरीज़ को बुखार है",16,"var(--ink)");
- s+=box(0,100,460,56,"var(--sink)","var(--edge)")+tx(14,122,'role: "assistant"',12,"var(--warm)")+tx(14,146,"बुखार कितने दिन से है?",15,"var(--ink)");
- s+=box(0,168,460,56,"var(--stop-bg)","var(--stop)")+tx(14,190,'role: "user"',12,"var(--stop)")+tx(14,214,"तीन दिन से",16,"var(--ink)");
- return S+s+
- tx(0,270,"One spoken answer.",17,"var(--stop)",null,1)+
- tx(0,296,"Two caller rows.",17,"var(--stop)",null,1)+
- box(0,324,460,96,"var(--sink)","var(--edge)")+
- tx(16,354,"A caller row, an agent row asking",14,"var(--soft)")+
- tx(16,378,"for what was just said, then the",14,"var(--soft)")+
- tx(16,402,"rest of the answer.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.fixtrack=function(){return S+
- trk(40,"CALLER SPEECH",[[0,190,"var(--go)"],[270,190,"var(--go)"]])+
- '<line x1="330" y1="30" x2="330" y2="200" stroke="var(--warm)" stroke-width="2" stroke-dasharray="4 4"/>'+
- tx(322,100,"turn opens here, mid-sentence",12,"var(--warm)","end")+
- trk(160,"_vad_user_speaking",[[0,460,"var(--go-bg)"]])+
- tx(14,183,"True. Untouched by the turn opening.",13,"var(--go-ink)",null,1)+
- box(0,236,460,120,"var(--go-bg)","var(--go)")+
- tx(18,266,"handle_user_turn_started() now calls",13,"var(--go-ink)")+
- tx(18,294,"_reset(",14,"var(--ink)")+
- tx(38,318,"clear_vad_user_speaking=False",13,"var(--go)")+
- tx(18,342,")",14,"var(--ink)")+
- tx(0,392,"handle_user_turn_stopped()",14,"var(--soft)")+
- tx(0,416,"still passes True.",14,"var(--soft)")+
- '</svg>';};
-
-VIS.bars=function(){return S+
- cap(18,"CHECK IT BY HAND")+
- box(0,34,460,64,"var(--sink)","var(--edge)")+
- tx(18,62,"1  Make a call on the branch",14,"var(--ink)")+
- tx(18,86,"and let the agent ask a question.",13,"var(--soft)")+
- box(0,110,460,88,"var(--sink)","var(--edge)")+
- tx(18,138,"2  Answer in two halves,",14,"var(--ink)")+
- tx(18,162,"pausing about half a second",13,"var(--soft)")+
- tx(18,186,"between them.",13,"var(--soft)")+
- box(0,210,460,64,"var(--sink)","var(--edge)")+
- tx(18,238,"3  Open transcript.json",14,"var(--ink)")+
- tx(18,262,"for that call.",13,"var(--soft)")+
- box(0,290,224,130,"var(--go-bg)","var(--go)")+
- tx(18,318,"FIXED",12,"var(--go)",null,1)+
- tx(18,346,"one caller row",14,"var(--ink)")+
- tx(18,372,"holding the",13,"var(--soft)")+
- tx(18,394,"whole answer",13,"var(--soft)")+
- box(236,290,224,130,"var(--stop-bg)","var(--stop)")+
- tx(254,318,"NOT FIXED",12,"var(--stop)",null,1)+
- tx(254,346,"two caller rows",14,"var(--ink)")+
- tx(254,372,"back to back",13,"var(--soft)")+
- '</svg>';};
-
-VIS.pr=function(){return S+
- box(0,10,460,118,"var(--go-bg)","var(--go)")+
- tx(20,46,"pipecat-ai/pipecat",16,"var(--go-ink)",null,1)+
- tx(20,74,"PR #4983",20,"var(--ink)",null,1)+
- tx(20,104,"Released in Pipecat 1.6.0",14,"var(--ink)")+
- cap(166,"THE VERSIONS THIS UPGRADE CROSSES")+
- tx(0,196,"1.2.1 → 1.3.0 → 1.4.0 → 1.5.0",15,"var(--faint)")+
- tx(0,232,"1.6.0",20,"var(--go)",null,1)+tx(78,232,"← the fix lands here",15,"var(--go)")+
- tx(0,268,"1.7.0 → 1.8.0 → 1.8.1",15,"var(--faint)")+
- box(0,300,460,120,"var(--sink)","var(--edge)")+
- tx(18,332,"Files changed in our repo",14,"var(--soft)")+
- tx(18,356,"for this fix:",14,"var(--soft)")+tx(158,356,"0",18,"var(--go)",null,1)+
- tx(18,390,"Taking this fix means taking",14,"var(--ink)")+
- tx(18,414,"every other change in this course.",14,"var(--ink)")+
- '</svg>';};
-
-
-/* ===== HTML diagram builders ===== */
-function esc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
-// mark: substrings to highlight inside the code excerpt
-function hl(code,marks){var h=esc(code);(marks||[]).forEach(function(m){var e=esc(m);h=h.split(e).join("<mark>"+e+"</mark>");});return h;}
-// before/after panel of real source lines
-function codepair(o){
-  return '<div class="cp">'+(o.cap?'<div class="cp-cap">'+o.cap+'</div>':'')+
-   '<div class="cp-box b"><div class="cp-h"><b>'+(o.bl||"Pipecat 1.2.1")+'</b><span>'+esc(o.file||"")+'</span></div><pre>'+hl(o.before,o.bm)+'</pre></div>'+
-   '<div class="cp-box a"><div class="cp-h"><b>'+(o.al||"Pipecat 1.8.1")+'</b><span>'+esc(o.file2||o.file||"")+'</span></div><pre>'+hl(o.after,o.am)+'</pre></div>'+
-   (o.note?'<div class="cp-note">'+o.note+'</div>':'')+'</div>';
-}
-// one panel of real source
-function codeone(o){
-  return '<div class="cp">'+(o.cap?'<div class="cp-cap">'+o.cap+'</div>':'')+
-   '<div class="cp-box '+(o.tone||"a")+'"><div class="cp-h"><b>'+(o.label||"Pipecat 1.8.1")+'</b><span>'+esc(o.file||"")+'</span></div><pre>'+hl(o.code,o.marks)+'</pre></div>'+
-   (o.note?'<div class="cp-note">'+o.note+'</div>':'')+'</div>';
-}
-// our production setup, with the component a change touches
-// rows: [label, detail, state]  state: "hit" (changed and in production), "miss" (in production, untouched), "off" (not in production)
-function stack(o){
-  var r=(o.rows||[]).map(function(x){
-    var tag=x[3]||{hit:"changed, in production",miss:"in production",off:"not in production",moot:"changed, not in production"}[x[2]]||"";
-    return '<div class="stk-row '+x[2]+'"><div>'+x[0]+(x[1]?'<small>'+x[1]+'</small>':'')+'</div><span class="tag">'+tag+'</span></div>';
-  }).join("");
-  return '<div class="cp">'+(o.cap?'<div class="cp-cap">'+o.cap+'</div>':'')+'<div class="stk">'+r+'</div>'+(o.note?'<div class="cp-note">'+o.note+'</div>':'')+'</div>';
-}
-
+VIS["l1a"]=function(){return simple3({"before": "A half-second pause mid-answer closed the turn. The agent replied to half the answer.", "after": "Opening a turn no longer erases VAD’s note. The turn waits for a real stop.", "us": "Fixed by upgrading. Nothing in our code changed."});};
+VIS["l1b"]=function(){return simple3({"labels": ["Opens", "Closes", "The risk"], "before": "When the caller starts answering.", "after": "When the agent decides the caller has finished.", "us": "Too early cuts the caller off. Too late feels slow."});};
+VIS["l1c"]=function(){return simple3({"labels": ["VAD", "Sarvam STT", "The note"], "before": "Reports only start and stop of sound, no words. A stop needs 0.2 seconds of quiet.", "after": "Sends the words as one transcript after a pause, up to about a second late.", "us": "Pipecat notes VAD’s last report: is the caller talking right now."});};
+VIS["l1d"]=function(){return simple3({"labels": ["What happened", "Why", "Result"], "before": "The caller resumed. The transcript of the first half opened the turn.", "after": "Opening a turn erased VAD’s note, and VAD does not repeat a start.", "us": "VAD’s note said “not talking” while the caller was talking. The note stayed wrong."});};
+VIS["l1e"]=function(){return simple3({"labels": ["What happened", "Why", "What the caller heard"], "before": "A 0.4 second timer closed the turn mid-sentence.", "after": "The erased note made Pipecat think VAD was not in use.", "us": "The agent answered the first half while they were still talking. The rest came back as a new turn."});};
+VIS["l1f"]=function(){return simple3({"labels": ["Before, 1.2.1", "Now, 1.8.1", "Check it yourself"], "before": "Opening a turn erased VAD’s note. The turn closed before the caller finished.", "after": "Opening a turn leaves the note alone. The turn closes on a real stop.", "us": "Answer in two halves with a half-second pause. transcript.json shows one caller row."});};
 // three plain boxes that repeat the slide's text in one line each
 function simple3(o){
+  var lb=o.labels||["Before, 1.2.1","Now, 1.8.1","What it means for us"];
   function box(cls,label,text){ return '<div class="s3 '+cls+'"><b>'+label+'</b>'+text+'</div>'; }
-  return '<div class="cp s3wrap">'+box("b","Before, 1.2.1",o.before)+box("a","Now, 1.8.1",o.after)+box("u","What it means for us",o.us)+'</div>';
+  return '<div class="cp s3wrap">'+box("b",lb[0],o.before)+box("a",lb[1],o.after)+box("u",lb[2],o.us)+'</div>';
 }
 /* ===== GEN VIS ===== */
 VIS["s2"]=function(){return simple3({"before": "A transcript marked final closed the turn at once, even if more words were still coming.", "after": "More words after a final mark cancel it. The turn stays open.", "us": "Sarvam STT sends one transcript per turn, no partial text and no final mark. Never happened on our calls."});};
@@ -914,23 +559,6 @@ VIS["s47"]=function(){return simple3({"before": "TTFB only: stops at the first t
 VIS["s48"]=function(){return simple3({"before": "Old events: audio once per run of speech, several times a turn, no turn number.", "after": "New events: once per turn, with the turn number. Old events removed in Pipecat 2.0.", "us": "Used only to recover cut-off agent audio. Switching fully deletes those 30 lines. Old events stay until Pipecat 2.0."});};
 /* ===== END GEN VIS ===== */
 
-var PLAYER='<div class="prow"><button class="btn solid" id="play">Play</button>'+
- '<button class="btn" id="flip">Show: <span id="fl">Before</span></button></div>'+
- '<div class="well"><div class="lane"><div class="lh"><span id="ll">Before &middot; 1.2.1</span>'+
- '<span class="vd" id="vd" data-t="bad">&nbsp;</span></div>'+
- '<div class="tracks">'+
-  '<div class="tl">caller</div><div class="track">'+
-   '<div class="blob c" style="left:8%;width:33%">&#2350;&#2352;&#2368;&#2364;&#2332;&#2364; &#2325;&#2379; &#2348;&#2369;&#2326;&#2366;&#2352; &#2361;&#2376;</div>'+
-   '<div class="blob" id="b2" style="left:52%;width:25%">&#2340;&#2368;&#2344; &#2342;&#2367;&#2344; &#2360;&#2375;</div>'+
-  '</div>'+
-  '<div class="tl">agent</div><div class="track">'+
-   '<div class="blob a" id="ba" style="left:80%;width:18%">reply</div>'+
-  '</div>'+
-  '<div class="cut" id="cu" style="left:48%"><span>turn closed</span></div><div class="ph" id="pl"></div>'+
- '</div>'+
- '<div class="rul"><span style="left:0%">0s</span><span style="left:50%">3s</span><span style="left:100%">6s</span></div>'+
- '</div></div>';
-
 function render(){
   var f=FLAT[at], l=L[f.li], s=l.s[f.si], m=M[l.m];
   var lessonNo=L.filter(function(x,i){ return x.m===l.m && i<=f.li; }).length;
@@ -951,6 +579,7 @@ function render(){
 
   var kind=s[0];
   var label={over:"What this is about",setup:"Setup",trap:"The trap",before:"Before",now:"Now",us:"For us",num:"By the numbers",demo:"Try it",skip:"Not relevant to us",avail:"Improvement available. Not used yet",take:"What adopting it would take",what:"What it is"}[kind]||"";
+  if(kind==="step") label="Step "+f.si+" of "+(l.s.length-1);
   slideEl.setAttribute("data-k",kind);
 
   var head;
@@ -964,7 +593,7 @@ function render(){
       (s[4]?'<div class="why"><b>'+(kind==="avail"?"What adopting it would take":"Why not relevant to us")+'</b>'+s[4]+'</div>':'');
   }
 
-  var art = kind==="demo" ? PLAYER : (s[3] && VIS[s[3]] ? VIS[s[3]]() : "");
+  var art = (s[3] && VIS[s[3]] ? VIS[s[3]]() : "");
   if(art){
     slideEl.className="slide hasvis";
     slideEl.innerHTML='<div class="txt">'+head+'</div><div class="vis">'+art+'</div>';
@@ -972,7 +601,6 @@ function render(){
     slideEl.className="slide";
     slideEl.innerHTML=head;
   }
-  if(kind==="demo") wirePlayer();
 
   (vis[f.li]=vis[f.li]||{})[f.si]=true;
   if(f.si===l.s.length-1 && !autoed[f.li]){ autoed[f.li]=true; seen[f.li]=true; }
@@ -1002,35 +630,6 @@ document.addEventListener("keydown",function(e){
   if(e.key==="ArrowRight") go(at+1);
   if(e.key==="ArrowLeft") go(at-1);
 });
-
-function wirePlayer(){
-  var SPAN=6,pct=function(s){return s/SPAN*100;},mode="before",timer=null;
-  var b2=document.getElementById("b2"),ba=document.getElementById("ba"),cu=document.getElementById("cu"),
-      pl=document.getElementById("pl"),vd=document.getElementById("vd"),ll=document.getElementById("ll"),
-      play=document.getElementById("play"),flip=document.getElementById("flip"),fl=document.getElementById("fl");
-  var CB=3.7,RB=3.8,CA=5.0,RA=5.1;
-  function paint(){
-    var b=mode==="before";
-    ll.textContent=b?"Before · 1.2.1":"Now · 1.8.1";
-    cu.style.left=pct(b?CB:CA)+"%";
-    b2.className="blob "+(b?"x":"c");
-    ba.style.left=pct(b?RB:RA)+"%"; ba.style.width=(100-pct(b?RB:RA)-2)+"%";
-    vd.textContent=" "; vd.setAttribute("data-t",b?"bad":"good");
-    cu.setAttribute("data-on","0"); pl.style.left="0%"; fl.textContent=b?"Before":"Now";
-  }
-  play.addEventListener("click",function(){
-    if(timer) cancelAnimationFrame(timer);
-    var b=mode==="before",cutAt=b?CB:CA,t0=performance.now(),DUR=4200;
-    cu.setAttribute("data-on","0"); vd.textContent=" "; play.disabled=true;
-    (function fr(now){
-      var k=Math.min(1,(now-t0)/DUR); pl.style.left=(k*100)+"%";
-      if(k*SPAN>=cutAt){ cu.setAttribute("data-on","1"); vd.textContent=b?"half the answer lost":"whole answer kept"; }
-      if(k<1){ timer=requestAnimationFrame(fr); } else { timer=null; play.disabled=false; }
-    })(t0);
-  });
-  flip.addEventListener("click",function(){ mode=mode==="before"?"after":"before"; paint(); });
-  paint();
-}
 
 render();
 })();

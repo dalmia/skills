@@ -125,14 +125,17 @@ The reader's corrections during the first course are the standard. The full list
 - `references/style-rules.md`: every writing rule, with the corrections that produced it.
 - `references/review-brief.md`: the five-dimension rubric handed to each review agent.
 - `references/example-pipecat-course/`: the finished Pipecat 1.2.1 to 1.8.1 course, unchanged:
-  `course-base.html` (its page, with a hand-written 19-slide deep-dive lesson 1 and SVG
-  diagrams), `lessons_m_all.py` (47 approved one-slide lessons), `build.py`, `fix_entries.py`,
+  `course-base.html` (its page, with lesson 1 written by hand as a summary slide plus five
+  step slides), `lessons_m_all.py` (47 approved one-slide lessons), `build.py`, `fix_entries.py`,
   `review_brief.md`, and the built `pipecat-upgrade-course.html` / `view.html`. Use it to match
   tone, structure, box wording, banners and sidebar behaviour.
 
-## Optional deep-dive lesson
+## Optional walk-through behind one lesson
 
-If the user asks for one lesson to go step by step (as lesson 1 of the example does), write it by
-hand in the built page's `GEN LESSONS` area as a multi-slide `les()` with kinds `over`, `setup`,
-`trap`, `before`, `now`, `us`, and draw its SVG diagrams with the `box`, `tx`, `cap`, `arrow`
-helpers in `course.html`. Copy the structure from the example's lesson 1. Do this only when asked.
+When one change deserves to be understood step by step (the example course does this for its
+first lesson), do not write a different kind of lesson. Keep the summary slide in the standard
+format and add up to five `step(...)` slides to that lesson through `steps=` on `add()`. Each
+step has the same shape as every other slide: banner "Step N of M", headline, body under
+110 words, three boxes with their own labels ("What happened", "Why", "What the caller heard").
+No hand-drawn diagrams, no code names, no player. The reader should not be able to tell the
+walk-through apart from the rest of the course by its look.

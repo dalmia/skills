@@ -19,6 +19,8 @@
 #             skip  -> exactly why it does not apply (which feature is off, which provider is not used)
 #             avail -> exactly what adopting it would take (which file, which setting, which decision)
 #           None for "over".
+#   steps   optional: a list of step(...) slides shown after the summary slide, for the one or two
+#           lessons that deserve a walk-through. Same three-box shape, own box labels, banner "Step N of M".
 
 import json
 
@@ -44,10 +46,22 @@ MODULES = [
 L = []
 
 
-def add(m, title, kind, head, text, before, now, us, why=None):
+def add(m, title, kind, head, text, before, now, us, why=None, steps=()):
     assert kind in ("over", "skip", "avail"), kind
     assert (kind == "over") == (why is None), "skip/avail need a why box; over must not have one: " + title
-    L.append(dict(m=m, title=title, kind=kind, head=head, text=text, before=before, now=now, us=us, why=why))
+    L.append(dict(m=m, title=title, kind=kind, head=head, text=text, before=before, now=now, us=us, why=why,
+                  steps=list(steps)))
+
+
+def step(head, text, labels, a, b, c):
+    """One optional walk-through slide behind a lesson's summary slide (see steps= on add()).
+
+    labels: the three box titles for this step, e.g. ("What happened", "Why", "What the caller heard").
+    a, b, c: the three box lines, under 20 words each. Same rules as the summary slide otherwise.
+    The slide shows the banner "Step N of M" on its own.
+    """
+    assert len(labels) == 3, labels
+    return dict(head=head, text=text, labels=list(labels), a=a, b=b, c=c)
 
 
 # ================================================================ MODULE 1
@@ -67,4 +81,9 @@ for i, e in enumerate(L):
     slide = [e["kind"], e["head"], e["text"], key]
     if e["why"]:
         slide.append(e["why"])
-    LESSONS.append({"m": e["m"], "title": e["title"], "slides": [slide]})
+    slides = [slide]
+    for j, st in enumerate(e["steps"]):
+        skey = "%s_step%d" % (key, j + 1)
+        VIS[skey] = "simple3(" + js({"labels": st["labels"], "before": st["a"], "after": st["b"], "us": st["c"]}) + ")"
+        slides.append(["step", st["head"], st["text"], skey])
+    LESSONS.append({"m": e["m"], "title": e["title"], "slides": slides})
