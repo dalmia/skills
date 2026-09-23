@@ -51,7 +51,7 @@
   .rst{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--faint);background:none;border:0;cursor:pointer;text-decoration:underline}
   .rst:hover{color:var(--ink)}
 
-  .grid{display:grid;grid-template-columns:282px 1fr;gap:18px;flex:1;min-height:0}
+  .grid{display:grid;grid-template-columns:282px 1fr;grid-template-rows:minmax(0,1fr);gap:18px;flex:1;min-height:0}
   @media (max-width:900px){.grid{grid-template-columns:1fr;min-height:0}}
 
   /* sidebar */
@@ -107,7 +107,7 @@
   @media (max-width:980px){.slide.hasvis{grid-template-columns:1fr;gap:18px}}
   .txt{display:flex;flex-direction:column;gap:12px;min-width:0;justify-content:center}
   .vis{min-width:0;min-height:0;height:100%;display:flex;flex-direction:column;justify-content:center;gap:14px}
-  .vis svg{width:100%;height:100%;display:block;overflow:visible}
+  .vis svg{width:100%;height:100%;max-height:calc(100vh - 230px);display:block;overflow:visible}
   @media (max-width:980px){.vis{height:auto} .vis svg{height:auto;max-height:52vh}}
   /* narrow screens scroll the page: keep the buttons on screen */
   @media (max-width:900px){.foot{position:sticky;bottom:0;background:var(--paper);padding:10px 0;margin:0 -2px;z-index:2}}
@@ -292,12 +292,12 @@ les(0,"The pause that ended turns early",[
  ["trap","Our turn opens on that late transcript","<code>MinWordsUserTurnStartStrategy(min_words=1)</code> opens the caller\'s turn on the first <code>TranscriptionFrame</code>. If the caller paused briefly and carried on, that frame lands after the caller has resumed. So the turn opens while the caller is mid-sentence.","turnstart"],
  ["before","Opening the turn reset the stop strategy","<code>UserTurnController</code> hands each frame to the start strategy first and the stop strategy second. When the start strategy opens a turn, the controller calls <code>reset()</code> on the stop strategy, before the same transcript reaches it. In 1.2.1, <code>reset()</code> set <code>_vad_user_speaking</code> to <code>False</code> and <code>_vad_stopped_time</code> to <code>None</code>. The caller was still speaking, and <code>SileroVADAnalyzer</code> sent nothing new, because it only sends a start frame after a stop frame.","wipe"],
  ["before","Those two values together mean something specific","<code>_vad_user_speaking</code> <code>False</code> with <code>_vad_stopped_time</code> <code>None</code> means no VAD frame has arrived this turn at all. A real pause cannot produce that, because a real pause records a stop time. While someone is talking, only the reset produces it.","bothfalse"],
- ["before","The transcript then took the wrong branch","The same <code>TranscriptionFrame</code> now reaches the stop strategy. <code>_handle_transcription()</code> checks <code>if not self._vad_user_speaking and self._vad_stopped_time is None</code>. That branch exists for a transcript that arrives with no VAD frames at all. The reset made both parts true, so this transcript took it. The branch never looks at <code>finalized</code>, so it made no difference that Sarvam never sets it.","branch"],
+ ["before","The transcript then took the wrong branch","Sarvam's transcript now reaches the code that closes turns. That code asks one question: has VAD told me nothing at all this turn? If the answer is yes, it assumes VAD is not in use and starts its own 0.4 second timer to close the turn. The reset had just erased both VAD notes, so the answer came out yes, even though VAD had been reporting all along and the caller was still talking. The timer started.","branch"],
  ["before","That branch starts the 0.4 second timer","The branch calls <code>_restart_user_speech_timer()</code>, which closes the turn 0.4 seconds after this transcript unless a new VAD frame cancels it first. The caller is mid-sentence, so <code>SileroVADAnalyzer</code> sends nothing. The timer expires and the turn closes while the caller is still talking.","timer"],
  ["before","What lands in the transcript","The NEXT REPLY LLM answers the first half. The words after the pause come back later as a new caller turn of their own. Two caller rows around one agent row, for a single spoken answer, is the fingerprint of this bug.","hindi"],
  ["demo","Watch it happen","Six seconds of a call, with illustrative timings. Press Play. Press Show to switch between 1.2.1 and 1.8.1. Play it again."],
  ["now","The fix: opening a turn leaves _vad_user_speaking alone","Pipecat 1.6.0 (PR #4983) stopped the turn opening from clearing <code>_vad_user_speaking</code>. In 1.8.1 the controller calls <code>handle_user_turn_started()</code>, which runs <code>_reset(clear_vad_user_speaking=False)</code>. Closing a turn still clears it. Pipecat\'s own comment on the method gives the reason: the flag reflects live VAD state, not per-turn bookkeeping.","fixtrack"],
- ["now","So the wrong branch is no longer taken","<code>_vad_user_speaking</code> stays <code>True</code> through the turn opening, so the fallback condition is false. In 1.8.1 it reads <code>not self._vad_user_speaking and not self._vad_stopped</code>. The turn now waits for a real <code>VADUserStoppedSpeakingFrame</code> after the caller finishes.","branch2"],
+ ["now","So the wrong branch is no longer taken","The notes VAD wrote are left alone when the turn opens, so the code still knows the caller is talking. The answer to its question is no. It keeps the turn open and waits for VAD to report that the caller has really stopped.","branch2"],
  ["us","You can now read Pipecat\'s own description","<i>&ldquo;&hellip;ended the user turn mid-utterance when a new turn&rsquo;s reset() cleared VAD speaking state while the user was still talking.&rdquo;</i> Every term in that sentence is one you have now met. It goes on to mention a finalized transcript. Ours are never finalized, but the branch never checked, so the bug reached us all the same.","quote"],
  ["us","How to see it for yourself","No automated test covers this, because the fix is in Pipecat, not in our code. On the branch, make a call and answer a question in two halves, pausing about half a second between them. The pause has to be longer than 0.2 seconds, so VAD reports a stop, and short enough that you resume before Sarvam\'s transcript comes back. Then open <code>transcript.json</code> and count the caller rows for that answer.","bars"],
  ["us","Pipecat 1.6.0, PR #4983. No code from us","Nothing in our diff implements this fix. We get it by upgrading. That is the reason this PR exists.","pr"]
@@ -718,30 +718,30 @@ VIS.bothfalse=function(){return S+
 
 function flow(hot){
  return S+DEFS+
- box(80,0,300,46,"var(--sink)","var(--edge)")+tx(230,29,"TranscriptionFrame arrives",13,"var(--ink)","middle")+
+ box(80,0,300,46,"var(--sink)","var(--edge)")+tx(230,29,"Sarvam's transcript arrives",13,"var(--ink)","middle")+
  arrow(230,50,230,78)+
  box(0,84,460,50,"var(--sink)","var(--edge)")+
- tx(230,108,hot?"not _vad_user_speaking and":"not _vad_user_speaking and",12,"var(--ink)","middle")+
- tx(230,126,hot?"_vad_stopped_time is None  (1.2.1)":"not _vad_stopped  (1.8.1)",12,"var(--ink)","middle")+
+ tx(230,108,"Has VAD told me nothing",13,"var(--ink)","middle")+
+ tx(230,126,"at all this turn?",13,"var(--ink)","middle")+
  arrow(160,138,120,176)+arrow(300,138,340,176)+
- tx(100,164,"True",13,hot?"var(--stop)":"var(--faint)",null,1)+
- tx(336,164,"False",13,hot?"var(--faint)":"var(--go)",null,1)+
+ tx(100,164,"Yes",13,hot?"var(--stop)":"var(--faint)",null,1)+
+ tx(336,164,"No",13,hot?"var(--faint)":"var(--go)",null,1)+
  box(0,182,215,120,hot?"var(--stop-bg)":"var(--sink)",hot?"var(--stop)":"var(--edge)")+
- tx(107,212,"_stt_wait_done",11,"var(--ink)","middle")+
- tx(107,234,"= True",11,"var(--ink)","middle")+
- tx(107,262,"_restart_user_",11,"var(--ink)","middle")+
- tx(107,282,"speech_timer()",11,"var(--ink)","middle")+
+ tx(107,212,"Assume VAD is not in use.",11,"var(--ink)","middle")+
+ tx(107,234,"Start a 0.4 second timer.",11,"var(--ink)","middle")+
+ tx(107,262,"Close the turn when",11,"var(--ink)","middle")+
+ tx(107,282,"it runs out.",11,"var(--ink)","middle")+
  box(245,182,215,120,hot?"var(--sink)":"var(--go-bg)",hot?"var(--edge)":"var(--go)")+
- tx(352,212,"leave the turn",11,"var(--ink)","middle")+
- tx(352,234,"open",11,"var(--ink)","middle")+
- tx(352,262,"wait for a real",11,"var(--ink)","middle")+
- tx(352,282,"stop frame",11,"var(--ink)","middle")+
+ tx(352,212,"Keep the turn open.",11,"var(--ink)","middle")+
+ tx(352,234,"Wait for VAD to say",11,"var(--ink)","middle")+
+ tx(352,262,"the caller has",11,"var(--ink)","middle")+
+ tx(352,282,"really stopped.",11,"var(--ink)","middle")+
  tx(107,322,hot?"↑ TAKEN":"",12,"var(--stop)","middle",1)+
  tx(352,322,hot?"":"↑ TAKEN",12,"var(--go)","middle",1)+
  box(0,344,460,96,hot?"var(--stop-bg)":"var(--go-bg)",hot?"var(--stop)":"var(--go)")+
- tx(18,376,hot?"The reset made the condition true,":"_vad_user_speaking is True, so",14,"var(--ink)")+
- tx(18,400,hot?"so the timer path runs. That path is":"the condition is false. The turn",14,"var(--ink)")+
- tx(18,424,hot?"meant for calls with no VAD at all.":"closes only when the caller stops.",14,"var(--ink)")+
+ tx(18,376,hot?"The reset had erased VAD's notes,":"VAD's notes are left alone, so the",14,"var(--ink)")+
+ tx(18,400,hot?"so the answer was wrongly yes.":"answer is no. The turn closes only",14,"var(--ink)")+
+ tx(18,424,hot?"The turn closed mid-sentence.":"when the caller really stops.",14,"var(--ink)")+
  '</svg>';}
 VIS.branch=function(){return flow(true);};
 VIS.branch2=function(){return flow(false);};
